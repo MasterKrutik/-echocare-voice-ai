@@ -14,6 +14,78 @@ if (!globalForCases.__echocare_cases) {
 
 const caseStore: Map<string, CaseState> = globalForCases.__echocare_cases;
 
+const BARE_CONFIRMATION_WORDS = new Set([
+  'yes',
+  'yep',
+  'yeah',
+  'yup',
+  'haan',
+  'ha',
+  'han',
+  'haanji',
+  'haji',
+  'sahi',
+  'sahi hai',
+  'sahihai',
+  'theek',
+  'theek hai',
+  'theekhai',
+  'correct',
+  'right',
+  'true',
+  'ok',
+  'okay',
+  'bilkul',
+  'avashya',
+  'हाँ',
+  'हाँजी',
+  'सही',
+  'सही है',
+  'ठीक',
+  'ठीक है',
+  'बिल्कुल',
+  'अवश्य',
+]);
+
+const BARE_REJECTION_WORDS = new Set([
+  'no',
+  'nope',
+  'nah',
+  'nahi',
+  'nahin',
+  'na',
+  'galat',
+  'galat hai',
+  'galathai',
+  'incorrect',
+  'wrong',
+  'false',
+  'not correct',
+  'notcorrect',
+  'गलत',
+  'गलत है',
+  'नहीं',
+  'ना',
+]);
+
+export function isBareConfirmationWord(val: string): boolean {
+  if (!val) return false;
+  const clean = val
+    .trim()
+    .toLowerCase()
+    .replace(/^[^\w\u0900-\u097F]+|[^\w\u0900-\u097F]+$/g, '');
+  return BARE_CONFIRMATION_WORDS.has(clean);
+}
+
+export function isBareRejectionWord(val: string): boolean {
+  if (!val) return false;
+  const clean = val
+    .trim()
+    .toLowerCase()
+    .replace(/^[^\w\u0900-\u097F]+|[^\w\u0900-\u097F]+$/g, '');
+  return BARE_REJECTION_WORDS.has(clean);
+}
+
 function createInitialCase(): CaseState {
   return {
     category: {
@@ -104,15 +176,67 @@ export function updateCaseField(
   const currentCase = getCase(sessionId);
   const targetField = currentCase[field];
 
-  if (confirmationRejected) {
+  let effectiveValue = value;
+  let effectiveConfidence = confidence;
+  let effectiveRejected = Boolean(confirmationRejected);
+
+  // Safeguard: reject bare confirmation/rejection words as a field VALUE
+  if (
+    effectiveValue &&
+    (isBareConfirmationWord(effectiveValue) || isBareRejectionWord(effectiveValue))
+  ) {
+    console.warn(
+      `[updateCaseField] Rejected bare confirmation/rejection word "${effectiveValue}" for field "${field}". Value will NOT overwrite field.`,
+    );
+
+    if (isBareRejectionWord(effectiveValue)) {
+      effectiveRejected = true;
+    } else if (isBareConfirmationWord(effectiveValue)) {
+      // Caller confirmed the existing field value!
+      if (targetField.value && targetField.value.trim().length > 0) {
+        targetField.status = 'confirmed';
+        targetField.confidence = Math.max(
+          targetField.confidence,
+          effectiveConfidence ?? 0.95,
+        );
+      }
+    }
+    // Prevent the confirmation/rejection word from overwriting the field value
+    effectiveValue = undefined;
+  }
+
+  // Basic validation for contactNumber field:
+  // An Indian phone number must have exactly 10 digits.
+  // If not exactly 10 digits, cap confidence at 0.3 regardless of what LLM reports.
+  if (field === 'contactNumber' && effectiveValue !== undefined) {
+    let digits = effectiveValue.replace(/\D/g, '');
+    if (digits.length === 12 && digits.startsWith('91')) {
+      digits = digits.slice(2);
+    } else if (digits.length === 11 && digits.startsWith('0')) {
+      digits = digits.slice(1);
+    }
+
+    if (digits.length !== 10) {
+      console.warn(
+        `[updateCaseField] contactNumber "${effectiveValue}" has ${digits.length} digits (expected exactly 10). Capping confidence at 0.3.`,
+      );
+      effectiveConfidence = Math.min(
+        effectiveConfidence !== undefined ? effectiveConfidence : 0.3,
+        0.3,
+      );
+      targetField.status = 'unverified';
+    }
+  }
+
+  if (effectiveRejected) {
     targetField.reaskCount += 1;
     targetField.status = 'rejected';
-    if (value && value.trim().length > 0) {
-      if (isSignificantDifference(field, targetField.value, value)) {
+    if (effectiveValue && effectiveValue.trim().length > 0) {
+      if (isSignificantDifference(field, targetField.value, effectiveValue)) {
         currentCase.contradictionDetected = true;
       }
-      targetField.value = value;
-      targetField.confidence = confidence ?? 0.5;
+      targetField.value = effectiveValue;
+      targetField.confidence = effectiveConfidence ?? 0.5;
     }
   } else {
     const hasExistingValue = Boolean(
@@ -121,22 +245,29 @@ export function updateCaseField(
 
     if (
       hasExistingValue &&
-      value &&
-      value.trim().length > 0 &&
-      targetField.value.trim().toLowerCase() !== value.trim().toLowerCase()
+      effectiveValue &&
+      effectiveValue.trim().length > 0 &&
+      targetField.value.trim().toLowerCase() !== effectiveValue.trim().toLowerCase()
     ) {
       targetField.reaskCount += 1;
-      if (isSignificantDifference(field, targetField.value, value)) {
+      if (isSignificantDifference(field, targetField.value, effectiveValue)) {
         currentCase.contradictionDetected = true;
       }
     }
 
-    if (value !== undefined) {
-      targetField.value = value;
+    if (effectiveValue !== undefined) {
+      targetField.value = effectiveValue;
     }
-    if (confidence !== undefined) {
-      targetField.confidence = confidence;
-      targetField.status = confidence >= 0.8 ? 'confirmed' : 'unverified';
+    if (effectiveConfidence !== undefined) {
+      targetField.confidence = effectiveConfidence;
+      // If contactNumber has wrong digit count, force unverified status
+      const isBadContactNumber =
+        field === 'contactNumber' &&
+        targetField.value.replace(/\D/g, '').replace(/^(91|0)/, '').length !== 10;
+      targetField.status =
+        effectiveConfidence >= 0.8 && !isBadContactNumber
+          ? 'confirmed'
+          : 'unverified';
     }
   }
 

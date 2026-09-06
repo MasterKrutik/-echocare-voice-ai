@@ -52,6 +52,14 @@ function parseTranscriptToCase(messages: TranscriptItem[]): {
         contactNumber = cleanDigits;
       } else if (cleanDigits.length === 12 && cleanDigits.startsWith('91')) {
         contactNumber = cleanDigits.slice(2);
+      } else if (
+        !contactNumber &&
+        cleanDigits.length >= 3 &&
+        cleanDigits.length <= 15 &&
+        /number|contact|phone|मोबाइल|नंबर/i.test(text)
+      ) {
+        // Explicitly mentioned number, but wrong digit count
+        contactNumber = cleanDigits;
       }
     }
 
@@ -59,9 +67,14 @@ function parseTranscriptToCase(messages: TranscriptItem[]): {
 
     // Location extraction
     const isQuestion = /\?|बता सकते|बताइए|could you|can you|please provide|नोट कर|दर्ज/i.test(text);
+    const isBareConfirmationOrRejection = (str: string) =>
+      /^(yes|no|yeah|yep|nope|haan|ha|han|nahi|nahin|na|sahi|sahi hai|theek|theek hai|galat|galat hai|correct|wrong|right|true|false|ok|okay|haanji|हाँ|हाँजी|सही|सही है|ठीक|ठीक है|गलत|गलत है|नहीं|ना)[\s.!,?]*$/i.test(
+        str.trim(),
+      );
 
     if (
       !isQuestion &&
+      !isBareConfirmationOrRejection(text) &&
       i > 0 &&
       /location|address|स्थान|कहाँ|जगह|क्षेत्र|area/i.test(prevMsg) &&
       text.length > 3
@@ -70,10 +83,11 @@ function parseTranscriptToCase(messages: TranscriptItem[]): {
     } else if (
       !location &&
       !isQuestion &&
+      !isBareConfirmationOrRejection(text) &&
       /(?:sector\s*\d+|colony|nagar|vihar|enclave|marg|delhi|noida|gurgaon|ghaziabad|lajpat|rohini)/i.test(text)
     ) {
       location = text.trim();
-    } else if (!location && !isQuestion) {
+    } else if (!location && !isQuestion && !isBareConfirmationOrRejection(text)) {
       const locMatch = text.match(
         /(?:location is|address is|rehta hoon|rehti hoon|near\s+[A-Za-z0-9\s,\-]+|at\s+[A-Za-z0-9\s,\-]+)/i,
       );
@@ -86,6 +100,7 @@ function parseTranscriptToCase(messages: TranscriptItem[]): {
     if (
       !description &&
       !isQuestion &&
+      !isBareConfirmationOrRejection(text) &&
       /problem|issue|broken|overflow|not working|paani|leak|damaged|dirty|gaddha|pothole|kachra|garbage|waste|बदबू|सफाई|पानी|नाली/i.test(
         text,
       ) &&
@@ -95,6 +110,7 @@ function parseTranscriptToCase(messages: TranscriptItem[]): {
     } else if (
       !description &&
       !isQuestion &&
+      !isBareConfirmationOrRejection(text) &&
       i > 0 &&
       /problem|issue|grievance|समस्या|शिकायत|दिक्कत|बताएं/i.test(prevMsg) &&
       text.length > 5
@@ -116,10 +132,27 @@ function parseTranscriptToCase(messages: TranscriptItem[]): {
     }
   }
 
+  // Safety fallback: ensure location is never a bare confirmation word
+  if (
+    /^(yes|no|yeah|yep|nope|haan|ha|han|nahi|nahin|na|sahi|sahi hai|theek|theek hai|galat|galat hai|correct|wrong|right|true|false|ok|okay|haanji|हाँ|हाँजी|सही|सही है|ठीक|ठीक है|गलत|गलत है|नहीं|ना)[\s.!,?]*$/i.test(
+      location.trim(),
+    )
+  ) {
+    location = '';
+  }
+
+  let contactDigits = contactNumber.replace(/\D/g, '');
+  if (contactDigits.length === 12 && contactDigits.startsWith('91')) {
+    contactDigits = contactDigits.slice(2);
+  } else if (contactDigits.length === 11 && contactDigits.startsWith('0')) {
+    contactDigits = contactDigits.slice(1);
+  }
+  const isExact10 = contactDigits.length === 10;
+
   const isEscalated = rejections >= 2 || hasEscalationPhrase;
   const escalationReason =
     rejections >= 2
-      ? "reaskCount >= 2 on contactNumber"
+      ? 'reaskCount >= 2 on contactNumber'
       : isEscalated
         ? 'Escalated by municipal assistant to officer'
         : '';
@@ -147,8 +180,14 @@ function parseTranscriptToCase(messages: TranscriptItem[]): {
     },
     contactNumber: {
       value: contactNumber || '9876543210',
-      confidence: rejections > 0 ? 0.5 : 0.95,
-      status: rejections > 0 ? 'rejected' : 'confirmed',
+      confidence:
+        !isExact10 && contactNumber ? 0.3 : rejections > 0 ? 0.5 : 0.95,
+      status:
+        !isExact10 && contactNumber
+          ? 'unverified'
+          : rejections > 0
+            ? 'rejected'
+            : 'confirmed',
       reaskCount: rejections,
     },
     contradictionDetected: false,

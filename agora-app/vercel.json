@@ -5,6 +5,12 @@
   "installCommand": "pnpm install",
   "framework": "nextjs",
   "outputDirectory": ".next",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://echocare-voice-ai.onrender.com/api/:path*"
+    }
+  ],
   "env": {
     "NEXT_PUBLIC_VERCEL_URL": "${VERCEL_URL}"
   },

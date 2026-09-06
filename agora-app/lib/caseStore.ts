@@ -4,7 +4,15 @@ import {
   EscalationResult,
 } from '@/types/case';
 
-const caseStore = new Map<string, CaseState>();
+const globalForCases = globalThis as unknown as {
+  __echocare_cases?: Map<string, CaseState>;
+};
+
+if (!globalForCases.__echocare_cases) {
+  globalForCases.__echocare_cases = new Map<string, CaseState>();
+}
+
+const caseStore: Map<string, CaseState> = globalForCases.__echocare_cases;
 
 function createInitialCase(): CaseState {
   return {
@@ -98,7 +106,7 @@ export function updateCaseField(
 
   if (confirmationRejected) {
     targetField.reaskCount += 1;
-    targetField.status = 'unverified';
+    targetField.status = 'rejected';
     if (value && value.trim().length > 0) {
       if (isSignificantDifference(field, targetField.value, value)) {
         currentCase.contradictionDetected = true;

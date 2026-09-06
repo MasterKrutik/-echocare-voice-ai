@@ -3,6 +3,7 @@
 import { useState, useRef, Suspense, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
+import Link from 'next/link';
 import type { RTMClient } from 'agora-rtm';
 import type {
   AgoraTokenData,
@@ -203,9 +204,28 @@ export default function LandingPage() {
 
   return (
     <div className="relative flex h-dvh min-h-screen flex-col overflow-hidden bg-background text-foreground">
+      {/* Top Navigation Bar */}
+      <header className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-6 py-4">
+        <Link href="/" className="flex items-center gap-2 group">
+          <span className="font-semibold text-sm tracking-wide text-white group-hover:text-primary transition-colors">
+            EchoCare
+          </span>
+          <span className="text-xs text-zinc-500 hidden sm:inline group-hover:text-zinc-300 transition-colors">
+            &larr; Home
+          </span>
+        </Link>
+        <Link
+          href="/officer-login"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 transition-colors shadow-sm"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+          Officer Portal &rarr;
+        </Link>
+      </header>
+
       {/* Hero shell: either shows the pre-call CTA or swaps in the live conversation experience. */}
       <div
-        className={`flex min-h-0 flex-1 flex-col ${
+        className={`flex min-h-0 flex-1 flex-col pt-12 ${
           showConversation
             ? 'items-stretch justify-start'
             : 'items-center justify-center'

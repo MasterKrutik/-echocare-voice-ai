@@ -1,4 +1,4 @@
-export type FieldStatus = 'unverified' | 'confirmed';
+export type FieldStatus = 'unverified' | 'confirmed' | 'rejected';
 
 export type CaseFieldKey =
   | 'category'

@@ -10,6 +10,7 @@ import {
 } from 'agora-agents';
 import { ClientStartRequest, AgentResponse } from '@/types/conversation';
 import { DEFAULT_AGENT_UID } from '@/lib/agora';
+import { registerAgentSession } from '@/lib/agentRegistry';
 
 // System prompt that defines the agent's personality and behavior.
 // Swap this out to change what the agent talks about.
@@ -70,11 +71,18 @@ CRITICAL MEMORY & NON-REPETITION INVARIANT:
   - In English: "I have recorded your location as [Location] and contact number as [Contact Number]. Could you please confirm if this is correct?"
 - If the caller rejects the confirmation (says "no", "incorrect", "wrong number", "गलत है", "नहीं"):
   - Apologize calmly and ask for the correction.
-- ESCALATION THRESHOLD:
-  - If the caller rejects confirmation 2 or more times for any field, you MUST immediately escalate:
+- ESCALATION THRESHOLD & INITIAL HANDOFF:
+  - If the caller rejects confirmation 2 or more times for any field, you MUST immediately announce escalation:
     - In Hindi: "असुविधा के लिए मुझे खेद है। मैं आपकी कॉल तुरंत हमारे नगर पालिका अधिकारी से जोड़ रहा हूँ।"
     - In English: "I apologize for the trouble. I am connecting you directly to a municipal officer who will assist you."
-  - Stop asking questions after escalating.
+
+# STRICT POST-ESCALATION HOLDING INVARIANT (CRITICAL MANDATE)
+- After announcing escalation/handoff, you MUST NOT answer any further questions or give any new information, even brief factual-sounding ones like resolution timelines, turnaround estimates, complaint progress, or municipal office details.
+- To ANYTHING further the caller says after escalation has been announced, NO MATTER WHAT THEY ASK (e.g. "How long will this take?", "When will someone arrive?", "किस समय तक ठीक होगा?", "क्या आज कोई आएगा?"):
+  - You MUST respond ONLY with the exact short holding line matching the language they used:
+    - In English: "Please hold, an officer will assist you shortly."
+    - In Hindi: "कृपया प्रतीक्षा करें, हमारे अधिकारी शीघ्र ही आपकी सहायता करेंगे।"
+  - NEVER provide answers, estimates, explanations, or any other conversation. Respond ONLY with the holding line, nothing else.
 
 # Critical Guardrails & Scope Limitations
 - NEVER provide medical, legal, financial, or emergency advice as fact.
@@ -225,6 +233,7 @@ export async function POST(request: NextRequest) {
     });
 
     const agentId = await session.start();
+    registerAgentSession(channel_name, agentId, session);
 
     return NextResponse.json({
       agent_id: agentId,

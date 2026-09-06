@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { AgoraClient, Area } from 'agora-agents';
 import { StopConversationRequest } from '@/types/conversation';
+import { unregisterAgentSession } from '@/lib/agentRegistry';
 
 function isAgentAlreadyStoppingOrStopped(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
@@ -50,9 +51,11 @@ export async function POST(request: Request) {
     });
     try {
       await client.stopAgent(agent_id);
+      unregisterAgentSession(agent_id);
     } catch (error) {
       if (isAgentAlreadyStoppingOrStopped(error)) {
         // Treat stop as idempotent: agent is already exiting (or gone).
+        unregisterAgentSession(agent_id);
         return NextResponse.json({ success: true, state: 'already-stopping' });
       }
       throw error;

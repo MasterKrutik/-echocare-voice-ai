@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import AgoraRTC, {
   useRTCClient,
   useLocalMicrophoneTrack,
@@ -38,6 +38,7 @@ import {
 } from './ConversationErrorCard';
 import { ConnectionStatusPanel } from './ConnectionStatusPanel';
 import { QuickstartConversationLayout } from './QuickstartConversationLayout';
+import { POST_ESCALATION_HOLD_PROMPT } from '@/lib/prompts';
 import {
   QuickstartPipelineMetrics,
   type QuickstartAgentMetric,
@@ -217,7 +218,7 @@ export default function ConversationComponent({
           rtcEngine: client,
           rtmConfig: { rtmEngine: rtmClient },
           renderMode: TranscriptHelperMode.TEXT,
-          enableLog: true,
+          enableLog: false,
         });
 
         if (cancelled) {
@@ -464,9 +465,74 @@ export default function ConversationComponent({
 
   useClientEvent(client, 'token-privilege-will-expire', handleTokenWillExpire);
 
+  // Auto-sync ticket to /api/tickets and update instructions when conversation reaches an escalation
+  const lastSyncedLengthRef = useRef<number>(0);
+  const hasUpdatedInstructionsRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (
+      messageList.length === 0 ||
+      messageList.length === lastSyncedLengthRef.current
+    )
+      return;
+
+    const fullText = messageList.map((m) => m.text).join(' ');
+    const hasEscalation =
+      /please hold|officer will assist|connecting you|municipal officer|officer|अधिकारी|सहायता करेंगे|hold mode|escalat/i.test(
+        fullText,
+      );
+    const hasRejections =
+      (fullText.match(
+        /(?:no|not correct|incorrect|wrong|iswrong|nahi|galat|गलत|नहीं)\b|iswrong|गलत|नहीं/gi,
+      ) || []).length >= 1;
+
+    if (hasEscalation || hasRejections || messageList.length >= 4) {
+      lastSyncedLengthRef.current = messageList.length;
+      fetch('/api/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: agoraData.channel,
+          transcript: messageList,
+        }),
+      }).catch((err) =>
+        console.error('Failed to sync ticket to /api/tickets:', err),
+      );
+    }
+
+    // Dynamic Instructions recipe pattern: swap system prompt to strict hold-only persona on escalation
+    if ((hasEscalation || hasRejections) && !hasUpdatedInstructionsRef.current) {
+      hasUpdatedInstructionsRef.current = true;
+      fetch('/api/updateInstructions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: agoraData.agentId,
+          channel_name: agoraData.channel,
+          instructions: POST_ESCALATION_HOLD_PROMPT,
+        }),
+      }).catch((err) =>
+        console.error('Failed to update agent instructions to hold mode:', err),
+      );
+    }
+  }, [messageList, agoraData.channel, agoraData.agentId]);
+
   const handleEndConversation = useCallback(async () => {
+    if (messageList.length > 0) {
+      try {
+        await fetch('/api/tickets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: agoraData.channel,
+            transcript: messageList,
+          }),
+        });
+      } catch (err) {
+        console.error('Failed to sync ticket on end conversation:', err);
+      }
+    }
     onEndConversation();
-  }, [onEndConversation]);
+  }, [messageList, agoraData.channel, onEndConversation]);
 
   return (
     <QuickstartConversationLayout

@@ -1,6 +1,7 @@
 'use client';
 
 import { Loader2 } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
 type QuickstartPreCallCardProps = {
@@ -23,17 +24,17 @@ export function QuickstartPreCallCard({
       }}
     >
       <h1 className="text-[28px] font-medium leading-[1.2] text-white">
-        Try Agora&apos;s Voice Agent
+        EchoCare Voice Intake
       </h1>
       <p className="mt-[14px] text-sm font-medium leading-6 text-muted-foreground">
-        Built on Agora&apos;s flagship Conversational AI engine, for effortless
-        agentic conversations.
+        Municipal civic grievance assistant with turn-by-turn language mirroring
+        and real-time officer escalation.
       </p>
 
       <Button
         onClick={onStartConversation}
         disabled={isLoading}
-        className="mt-12 h-10 w-full rounded-lg border border-primary bg-primary text-sm font-medium text-black hover:border-white hover:bg-white hover:text-black disabled:hover:border-primary disabled:hover:bg-primary disabled:hover:text-black"
+        className="mt-10 h-10 w-full rounded-lg border border-primary bg-primary text-sm font-medium text-black hover:border-white hover:bg-white hover:text-black disabled:hover:border-primary disabled:hover:bg-primary disabled:hover:text-black"
         aria-label={
           isLoading
             ? 'Starting conversation with AI agent'
@@ -50,6 +51,16 @@ export function QuickstartPreCallCard({
         )}
       </Button>
       {error && <p className="mt-3 text-xs text-destructive">{error}</p>}
+
+      <div className="mt-6 pt-4 border-t border-zinc-800/80 w-full flex items-center justify-center">
+        <Link
+          href="/dashboard"
+          className="text-xs font-medium text-zinc-400 hover:text-white transition-colors underline-offset-4 hover:underline flex items-center gap-1.5"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          View Live Tickets Dashboard &rarr;
+        </Link>
+      </div>
     </div>
   );
 }

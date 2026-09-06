@@ -3,6 +3,7 @@ import {
   CaseState,
   EscalationResult,
 } from '@/types/case';
+import { normalizePhoneNumber } from './phoneUtils';
 
 const globalForCases = globalThis as unknown as {
   __echocare_cases?: Map<string, CaseState>;
@@ -219,26 +220,34 @@ export function updateCaseField(
     }
   }
 
-  // Basic validation for contactNumber field:
+  // Contact number validation & spoken digit conversion:
   // An Indian phone number must have exactly 10 digits.
-  // If not exactly 10 digits, cap confidence at 0.3 regardless of what LLM reports.
+  // If not exactly 10 digits, cap confidence at 0.3, increment reaskCount, and check escalation.
   if (field === 'contactNumber' && effectiveValue !== undefined) {
-    let digits = effectiveValue.replace(/\D/g, '');
-    if (digits.length === 12 && digits.startsWith('91')) {
-      digits = digits.slice(2);
-    } else if (digits.length === 11 && digits.startsWith('0')) {
-      digits = digits.slice(1);
-    }
+    const { digits, isValid10 } = normalizePhoneNumber(effectiveValue);
 
-    if (digits.length !== 10) {
+    if (isValid10) {
+      effectiveValue = digits;
+      if (effectiveConfidence === undefined || effectiveConfidence < 0.8) {
+        effectiveConfidence = 0.95;
+      }
+    } else {
       console.warn(
-        `[updateCaseField] contactNumber "${effectiveValue}" has ${digits.length} digits (expected exactly 10). Capping confidence at 0.3.`,
+        `[updateCaseField] contactNumber "${effectiveValue}" has ${digits.length} digits (expected exactly 10). Capping confidence at 0.3 and incrementing failed attempts.`,
       );
+      effectiveValue = digits || effectiveValue;
       effectiveConfidence = Math.min(
         effectiveConfidence !== undefined ? effectiveConfidence : 0.3,
         0.3,
       );
-      targetField.status = 'unverified';
+      targetField.reaskCount += 1;
+      targetField.status = 'rejected';
+      targetField.value = effectiveValue;
+      targetField.confidence = effectiveConfidence;
+
+      // Immediately evaluate escalation on failed validation attempt
+      checkEscalation(sessionId);
+      return currentCase;
     }
   }
 
@@ -279,7 +288,7 @@ export function updateCaseField(
       // If contactNumber has wrong digit count, force unverified status
       const isBadContactNumber =
         field === 'contactNumber' &&
-        targetField.value.replace(/\D/g, '').replace(/^(91|0)/, '').length !== 10;
+        !normalizePhoneNumber(targetField.value).isValid10;
       targetField.status =
         effectiveConfidence >= 0.8 && !isBadContactNumber
           ? 'confirmed'
@@ -301,6 +310,14 @@ export function checkEscalation(sessionId: string): EscalationResult {
     'description',
     'contactNumber',
   ];
+
+  // Hard cap safety net: if contactNumber reaches 3 failed or rejected attempts, escalate unconditionally
+  if (currentCase.contactNumber.reaskCount >= 3) {
+    const reason = `Field 'contactNumber' reaskCount is ${currentCase.contactNumber.reaskCount} (threshold: 2)`;
+    currentCase.escalated = true;
+    currentCase.escalationReason = reason;
+    return { shouldEscalate: true, reason };
+  }
 
   // Rule 1: escalate if any field's reaskCount >= 2
   for (const field of fields) {

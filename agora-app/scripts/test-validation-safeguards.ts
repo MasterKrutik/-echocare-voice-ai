@@ -27,8 +27,13 @@ async function runValidationSafeguardTests() {
   );
   assert.strictEqual(
     caseState.contactNumber.status,
-    'unverified',
-    'Status must remain unverified for wrong-length number',
+    'rejected',
+    'Status must be rejected for wrong-length number to feed into escalation',
+  );
+  assert.strictEqual(
+    caseState.contactNumber.reaskCount,
+    1,
+    'Failed validation must increment reaskCount to prevent infinite loops',
   );
 
   let esc = checkEscalation(sessionPhone);
@@ -38,7 +43,7 @@ async function runValidationSafeguardTests() {
     true,
     'Confidence < 0.6 triggers low-confidence risk factor',
   );
-  console.log('✓ 5-digit number correctly capped at 0.3 confidence and marked unverified');
+  console.log('✓ 5-digit number correctly capped at 0.3 confidence and marked rejected (reaskCount=1)');
 
   // 1b: 8-digit number with LLM claiming 0.99 confidence
   caseState = updateCaseField(sessionPhone, 'contactNumber', '98765432', 0.99);
@@ -49,10 +54,15 @@ async function runValidationSafeguardTests() {
   );
   assert.strictEqual(
     caseState.contactNumber.status,
-    'unverified',
-    'Status must remain unverified for 8-digit number',
+    'rejected',
+    'Status must be rejected for 8-digit number',
   );
-  console.log('✓ 8-digit number correctly capped at 0.3 confidence and marked unverified');
+  assert.strictEqual(
+    caseState.contactNumber.reaskCount,
+    2,
+    'Second failed validation increments reaskCount to 2 and escalates',
+  );
+  console.log('✓ 8-digit number correctly capped at 0.3 confidence and marked rejected (reaskCount=2, escalated)');
 
   // 1c: 11-digit invalid number (e.g. 98765432109)
   caseState = updateCaseField(sessionPhone, 'contactNumber', '98765432109', 0.9);

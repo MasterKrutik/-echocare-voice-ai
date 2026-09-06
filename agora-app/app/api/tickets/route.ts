@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createTicket, getTickets } from '@/lib/ticketStore';
 import { CaseState } from '@/types/case';
+import { normalizePhoneNumber } from '@/lib/phoneUtils';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,7 @@ function isAgentMessage(msg: TranscriptItem): boolean {
   if (msg.role === 'agent' || msg.role === 'assistant') return true;
   if (msg.role === 'user') return false;
   const text = (msg.text || '').trim();
-  return /^(Namaste|नमस्ते|Welcome|How may I assist|मैं समझ सकता|मैंने आप|I have recorded|I apologize|Could you please|क्या आप कृपया|कृपया प्रतीक्षा)/i.test(
+  return /^(Namaste|नमस्ते|Welcome|How may I assist|मैं समझ सकत|मैंने आप|I have recorded|I apologize|Could you please|क्या आप कृपया|कृपया प्रतीक्षा)/i.test(
     text,
   );
 }
@@ -90,12 +91,12 @@ function parseTranscriptToCase(messages: TranscriptItem[]): {
 
     // Extract agent recorded contact number
     const agentPhoneMatch =
-      text.match(/(?:contact number as|phone number as|संपर्क नंबर(?: के रूप में)?)\s*[:=]?\s*["“]?([0-9\s]{10,12})["”]?/i) ||
-      text.match(/recorded your contact number as\s*["“]?([0-9\s]+)["”]?/i);
+      text.match(/(?:contact number as|phone number as|संपर्क नंबर(?: के रूप में)?)\s*[:=]?\s*["“]?([^"”?,.\n]+)["”]?/i) ||
+      text.match(/recorded your contact number as\s*["“]?([^"”?,.\n]+)["”]?/i);
     if (agentPhoneMatch && agentPhoneMatch[1]) {
-      const digits = agentPhoneMatch[1].replace(/\D/g, '');
-      if (digits.length >= 10) {
-        contactNumber = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
+      const norm = normalizePhoneNumber(agentPhoneMatch[1]);
+      if (norm.isValid10) {
+        contactNumber = norm.digits;
       }
     }
   }
@@ -149,23 +150,28 @@ function parseTranscriptToCase(messages: TranscriptItem[]): {
       }
     }
 
-    // 2. Caller providing phone number
-    const phoneMatch = text.match(/\b[6-9]\d{9}\b/) || text.match(/\b\d{10}\b/);
-    if (phoneMatch) {
-      contactNumber = phoneMatch[0];
-    } else {
-      const cleanDigits = text.replace(/\D/g, '');
-      if (cleanDigits.length === 10 && /^[6-9]/.test(cleanDigits)) {
-        contactNumber = cleanDigits;
-      } else if (cleanDigits.length === 12 && cleanDigits.startsWith('91')) {
-        contactNumber = cleanDigits.slice(2);
-      } else if (
-        !contactNumber &&
-        cleanDigits.length >= 3 &&
-        cleanDigits.length <= 15 &&
-        /number|contact|phone|मोबाइल|नंबर/i.test(text)
-      ) {
-        contactNumber = cleanDigits;
+    const prevAskedPhone =
+      isPrevAgent &&
+      /contact|phone|संपर्क|मोबाइल|नंबर/i.test(prevMsg) &&
+      !/(?:समस्या|शिकायत|स्थान|कॉलोनी|location|address)/i.test(prevMsg);
+
+    // 2. Caller providing phone number (numeric digits or spoken words)
+    const normPhone = normalizePhoneNumber(text);
+    if (normPhone.isValid10) {
+      if (!contactNumber) {
+        contactNumber = normPhone.digits;
+      }
+      isContactConfirmed = true;
+    } else if (
+      normPhone.digits.length > 0 &&
+      (prevAskedPhone || /number|contact|phone|मोबाइल|नंबर/i.test(text))
+    ) {
+      // Caller attempted a contact number but it did not have 10 digits!
+      // This is a failed validation attempt.
+      contactRejections++;
+      isContactConfirmed = false;
+      if (!contactNumber) {
+        contactNumber = normPhone.digits;
       }
     }
 
@@ -226,21 +232,20 @@ function parseTranscriptToCase(messages: TranscriptItem[]): {
     location = '';
   }
 
-  let contactDigits = contactNumber.replace(/\D/g, '');
-  if (contactDigits.length === 12 && contactDigits.startsWith('91')) {
-    contactDigits = contactDigits.slice(2);
-  } else if (contactDigits.length === 11 && contactDigits.startsWith('0')) {
-    contactDigits = contactDigits.slice(1);
-  }
-  const isExact10 = contactDigits.length === 10;
+  const normContact = normalizePhoneNumber(contactNumber);
+  const contactDigits = normContact.digits;
+  const isExact10 = normContact.isValid10;
 
+  // Escalation rule: reaskCount >= 2 or hard cap at 3 attempts, or escalation phrase detected
   const isEscalated = contactRejections >= 2 || hasEscalationPhrase;
   const escalationReason =
-    contactRejections >= 2
-      ? 'reaskCount >= 2 on contactNumber'
-      : isEscalated
-        ? 'Escalated by municipal assistant to officer'
-        : '';
+    contactRejections >= 3
+      ? `Hard cap reached: ${contactRejections} failed contact number attempts`
+      : contactRejections >= 2
+        ? 'reaskCount >= 2 on contactNumber'
+        : isEscalated
+          ? 'Escalated by municipal assistant to officer'
+          : '';
 
   const finalContactStatus = !isExact10 && contactNumber
     ? 'unverified'
@@ -282,7 +287,7 @@ function parseTranscriptToCase(messages: TranscriptItem[]): {
       reaskCount: 0,
     },
     contactNumber: {
-      value: contactNumber || '9638969969',
+      value: contactDigits || contactNumber || '',
       confidence: finalContactConfidence,
       status: finalContactStatus,
       reaskCount: contactRejections,

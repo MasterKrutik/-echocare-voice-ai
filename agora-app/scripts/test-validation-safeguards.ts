@@ -214,6 +214,143 @@ async function runValidationSafeguardTests() {
   );
   console.log('✓ Short phone in transcript correctly capped at 0.3 confidence and unverified status\n');
 
+  // -------------------------------------------------------------------------
+  // TEST 4: Reproduce exact live scenario from user testing
+  // -------------------------------------------------------------------------
+  console.log('Test 4: Exact live testing scenario: awkward location, issue description, 1 rejection, 1 confirmation');
+  const reqExactScenario = new NextRequest('http://localhost:3000/api/tickets', {
+    method: 'POST',
+    body: JSON.stringify({
+      sessionId: 'exact-live-scenario-session',
+      transcript: [
+        { role: 'agent', text: 'Namaste and welcome to EchoCare municipal helpline. How may I assist you with your civic grievance today?आप अपनी समस्या हिंदी में भी बता सकते हैं।' },
+        { role: 'user', text: 'Garbage picking web' },
+        { role: 'user', text: 'थोड़े दिनों से नहीं आई है.तो बहुत smell आने लगी है.' },
+        { role: 'user', text: 'क्योंकि garbage इकट्ठा होने लगा' },
+        { role: 'agent', text: 'मैं समझ सकता हूँ। क्या आप कृपया अपनी कॉलोनी या क्षेत्र का नाम बता सकते हैं?' },
+        { role: 'user', text: 'n I eighteen' },
+        { role: 'user', text: 'memberana' },
+        { role: 'user', text: 'राजस्थान से हुए' },
+        { role: 'agent', text: 'मैंने आपकी कॉलोनी का नाम "I Eighteen Memberana" दर्ज कर लिया है। क्या आप कृपया अपना संपर्क नंबर बता सकते हैं?' },
+        { role: 'user', text: "It's it's NIIT UniversityMurana." },
+        { role: 'agent', text: 'मैंने आपका स्थान "NIIT University Murana" दर्ज कर लिया है। क्या आप कृपया अपना संपर्क नंबर बता सकते हैं?' },
+        { role: 'user', text: "De la Saint Patrick's birthday," },
+        { role: 'user', text: 'nine six three eightsix nine six nine six.' },
+        { role: 'agent', text: 'I have recorded your contact number as 9638696969. Could you please confirm if this is correct?' },
+        { role: 'user', text: "No. It's not correct." }, // <-- ONE genuine rejection
+        { role: 'agent', text: 'I apologize for the trouble. Could you please provide the correct contact number?' },
+        { role: 'user', text: 'So, my contact number is nine six three eightnine six nine six nine six.' },
+        { role: 'agent', text: 'I have recorded your contact number as 9638969969. Could you please confirm if this is correct?' },
+        { role: 'user', text: 'Yes.' }, // <-- Confirmed!
+        { role: 'agent', text: 'मैंने आपका स्थान "NIIT University Murana" और संपर्क नंबर "9638969969" दर्ज किया है। क्या आप मुझे यह बताना चाहेंगे कि आपकी समस्या क्या है?' },
+        { role: 'user', text: 'Si ayer,थोड़े दिनों से गारबेज हुए' }, // <-- Description statement, NOT location!
+        { role: 'agent', text: 'मैं समझ सकता हूँ। मैंने आपकी समस्या के रूप में "गारबेज पिकिंग नहीं आ रही" दर्ज कर लिया है। कृपया प्रतीक्षा करें,हमारे अधिकारी शीघ्र ही आपकी सहायता करेंगे।' },
+        { role: 'user', text: 'क्या मैं municipality कोshow कर सकता हूं इस चीज़ की वजह से?' },
+        { role: 'agent', text: 'कृपया प्रतीक्षा करें,हमारे अधिकारी शीघ्र ही आपकी सहायता करेंगे।' },
+      ],
+    }),
+  });
+
+  const resExact = await POST(reqExactScenario);
+  assert.strictEqual(resExact.status, 201);
+  const ticketExact = await resExact.json();
+
+  // 1. Verify Location is NOT the description
+  assert.strictEqual(
+    ticketExact.caseSnapshot.location.value,
+    'NIIT University Murana',
+    `Location must be "NIIT University Murana" (got: "${ticketExact.caseSnapshot.location.value}")`,
+  );
+  assert.notStrictEqual(
+    ticketExact.caseSnapshot.location.value,
+    'Si ayer,थोड़े दिनों से गारबेज हुए',
+    'Location must NEVER be contaminated with the caller description',
+  );
+  console.log('✓ Location correctly captured as:', ticketExact.caseSnapshot.location.value);
+
+  // 2. Verify Description
+  assert(
+    ticketExact.caseSnapshot.description.value.includes('गारबेज') ||
+    ticketExact.caseSnapshot.description.value.toLowerCase().includes('garbage'),
+    `Description should capture the garbage issue (got: "${ticketExact.caseSnapshot.description.value}")`,
+  );
+  console.log('✓ Description correctly captured as:', ticketExact.caseSnapshot.description.value);
+
+  // 3. Verify Contact Number
+  assert.strictEqual(
+    ticketExact.caseSnapshot.contactNumber.value,
+    '9638969969',
+    `Contact number must be "9638969969" (got: "${ticketExact.caseSnapshot.contactNumber.value}")`,
+  );
+  assert.strictEqual(
+    ticketExact.caseSnapshot.contactNumber.reaskCount,
+    1,
+    `reaskCount must be exactly 1 after 1 rejection + 1 confirmation (got: ${ticketExact.caseSnapshot.contactNumber.reaskCount})`,
+  );
+  assert.strictEqual(
+    ticketExact.caseSnapshot.contactNumber.status,
+    'confirmed',
+    `Status must be "confirmed" after user says Yes (got: "${ticketExact.caseSnapshot.contactNumber.status}")`,
+  );
+  console.log('✓ Contact number confirmed with reaskCount = 1 (no false reaskCount increment)');
+
+  // 4. Verify No False Escalation
+  assert.strictEqual(
+    ticketExact.caseSnapshot.escalated,
+    false,
+    `Ticket must NOT be escalated (got: ${ticketExact.caseSnapshot.escalated}, reason: "${ticketExact.caseSnapshot.escalationReason}")`,
+  );
+  assert.strictEqual(
+    ticketExact.caseSnapshot.escalationReason,
+    '',
+    `Escalation reason must be empty (got: "${ticketExact.caseSnapshot.escalationReason}")`,
+  );
+  console.log('✓ No false escalation triggered! Ticket is unescalated.\n');
+
+  // -------------------------------------------------------------------------
+  // TEST 5: Verify 2 genuine rejections DOES properly escalate
+  // -------------------------------------------------------------------------
+  console.log('Test 5: Two genuine rejections properly triggers escalation');
+  const reqDoubleReject = new NextRequest('http://localhost:3000/api/tickets', {
+    method: 'POST',
+    body: JSON.stringify({
+      sessionId: 'double-reject-scenario-session',
+      transcript: [
+        { role: 'agent', text: 'Namaste, welcome to EchoCare.' },
+        { role: 'user', text: 'Streetlight not working in Sector 4 Noida' },
+        { role: 'agent', text: 'I have recorded your location as "Sector 4 Noida". What is your contact number?' },
+        { role: 'user', text: '9876543210' },
+        { role: 'agent', text: 'I have recorded your contact number as 9876543210. Could you please confirm if this is correct?' },
+        { role: 'user', text: "No, that's wrong." }, // Rejection 1
+        { role: 'agent', text: 'Please provide the correct number.' },
+        { role: 'user', text: '9876543211' },
+        { role: 'agent', text: 'I have recorded your contact number as 9876543211. Could you please confirm if this is correct?' },
+        { role: 'user', text: 'No, still incorrect.' }, // Rejection 2
+      ],
+    }),
+  });
+
+  const resDoubleReject = await POST(reqDoubleReject);
+  assert.strictEqual(resDoubleReject.status, 201);
+  const ticketDouble = await resDoubleReject.json();
+
+  assert.strictEqual(
+    ticketDouble.caseSnapshot.contactNumber.reaskCount,
+    2,
+    `reaskCount must be 2 after two genuine rejections (got: ${ticketDouble.caseSnapshot.contactNumber.reaskCount})`,
+  );
+  assert.strictEqual(
+    ticketDouble.caseSnapshot.escalated,
+    true,
+    'Ticket must be escalated after two genuine rejections',
+  );
+  assert.strictEqual(
+    ticketDouble.caseSnapshot.escalationReason,
+    'reaskCount >= 2 on contactNumber',
+    `Escalation reason must state reaskCount >= 2 on contactNumber (got: "${ticketDouble.caseSnapshot.escalationReason}")`,
+  );
+  console.log('✓ Two genuine rejections correctly triggers escalation with reason:', ticketDouble.caseSnapshot.escalationReason, '\n');
+
   console.log('=====================================================');
   console.log('ALL VALIDATION & CONFIRMATION SAFEGUARD TESTS PASSED!');
   console.log('=====================================================');

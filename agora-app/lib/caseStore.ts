@@ -205,6 +205,20 @@ export function updateCaseField(
     effectiveValue = undefined;
   }
 
+  // Prevent issue descriptions from overwriting location
+  if (field === 'location' && effectiveValue !== undefined) {
+    const isIssueDesc =
+      /(?:garbage|kachra|waste|trash|safai|smell|बदबू|सफाई|कूड़ा|गारबेज|नाली|drain|sewer|water|paani|leak|damaged|pothole|sadak|light|overflow|इकट्ठा)/i.test(
+        effectiveValue,
+      );
+    if (isIssueDesc) {
+      console.warn(
+        `[updateCaseField] Ignored issue description passed as location: "${effectiveValue}"`,
+      );
+      effectiveValue = undefined;
+    }
+  }
+
   // Basic validation for contactNumber field:
   // An Indian phone number must have exactly 10 digits.
   // If not exactly 10 digits, cap confidence at 0.3 regardless of what LLM reports.
@@ -242,9 +256,11 @@ export function updateCaseField(
     const hasExistingValue = Boolean(
       targetField.value && targetField.value.trim().length > 0,
     );
+    const wasAlreadyRejected = targetField.status === 'rejected';
 
     if (
       hasExistingValue &&
+      !wasAlreadyRejected &&
       effectiveValue &&
       effectiveValue.trim().length > 0 &&
       targetField.value.trim().toLowerCase() !== effectiveValue.trim().toLowerCase()

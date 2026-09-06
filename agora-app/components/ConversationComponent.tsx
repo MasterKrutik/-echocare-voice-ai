@@ -475,12 +475,12 @@ export default function ConversationComponent({
 
     const fullText = messageList.map((m) => m.text).join(' ');
     const hasEscalation =
-      /connecting you|municipal officer|अधिकारी|escalat/i.test(fullText);
+      /connecting you|municipal officer|अधिकारी से जोड़|escalat/i.test(fullText);
     const hasRejections =
-      (fullText.match(/no|not correct|incorrect|wrong|nahi|galat|गलत|नहीं/gi) ||
+      (fullText.match(/\b(?:no|not correct|incorrect|wrong|galat|गलत|sahi nahi)\b/gi) ||
         []).length >= 2;
 
-    if (hasEscalation || hasRejections || messageList.length >= 4) {
+    if (hasEscalation || hasRejections || messageList.length >= 2) {
       lastSyncedLengthRef.current = messageList.length;
       fetch('/api/tickets', {
         method: 'POST',

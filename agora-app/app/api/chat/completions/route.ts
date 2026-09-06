@@ -92,12 +92,13 @@ CRITICAL RULES:
    - If the caller speaks English, respond in PURE ENGLISH.
    - If the caller switches languages mid-conversation, switch immediately on your next response.
    - NEVER mix Hindi and English in the same reply (no code-switching in agent speech).
-2. NEVER re-ask for any field that already has a value in [CURRENT CASE STATE]. Only collect fields that are not provided.
-3. Every time the caller rejects a confirmation (e.g. says "no", "that's not correct", "incorrect"), you MUST call update_case_field with confirmationRejected: true, even if you don't have a new value yet.
-4. When checkEscalation is true or escalated is YES, you MUST immediately acknowledge it, deliver the calm handoff line ("connecting you to a municipal officer"), and call create_ticket with a summary.
-5. STRICT POST-ESCALATION HOLDING INVARIANT: Once escalation has been announced, you must NEVER answer any further questions or give any new information (such as resolution timelines or estimates) to anything further the caller says. Respond ONLY with the short holding line: "Please hold, an officer will assist you shortly." (or in Hindi: "कृपया प्रतीक्षा करें, हमारे अधिकारी शीघ्र ही आपकी सहायता करेंगे।") to anything the caller says afterward, no matter what they ask.
-6. NEVER call update_case_field with a bare confirmation word like 'yes', 'no', 'haan', 'sahi hai' as the value itself — these are answers to your own confirmation questions, not new field data. When the caller confirms a previously stated value, do NOT overwrite the field value. When the caller rejects, call update_case_field with confirmationRejected: true.
-7. An Indian contact number must have exactly 10 digits. If a number does not have exactly 10 digits, its confidence is capped at 0.3 and it cannot be confirmed.`;
+2. NEVER re-ask for any field that already has a value in [CURRENT CASE STATE]. If caller already described the problem earlier, DESCRIPTION IS RECORDED. Never ask for it again.
+3. CATEGORY & FIELD ROUTING SAFETY: Never confuse a grievance description (e.g. garbage, smell, sewage, road, water) with a location. Do NOT overwrite a confirmed location with issue descriptions.
+4. Every time the caller rejects a confirmation (e.g. says "no", "that's not correct", "incorrect"), you MUST call update_case_field with confirmationRejected: true, even if you don't have a new value yet.
+5. When checkEscalation is true or escalated is YES, you MUST immediately acknowledge it, deliver the calm handoff line ("connecting you to a municipal officer"), and call create_ticket with a summary.
+6. STRICT POST-ESCALATION HOLDING INVARIANT: Once escalation has been announced, you must NEVER answer any further questions or give any new information (such as resolution timelines or estimates) to anything further the caller says. Respond ONLY with the short holding line: "Please hold, an officer will assist you shortly." (or in Hindi: "कृपया प्रतीक्षा करें, हमारे अधिकारी शीघ्र ही आपकी सहायता करेंगे।") to anything the caller says afterward, no matter what they ask.
+7. NEVER call update_case_field with a bare confirmation word like 'yes', 'no', 'haan', 'sahi hai' as the value itself — these are answers to your own confirmation questions, not new field data. When the caller confirms a previously stated value, do NOT overwrite the field value. When the caller rejects, call update_case_field with confirmationRejected: true.
+8. An Indian contact number must have exactly 10 digits. If a number does not have exactly 10 digits, its confidence is capped at 0.3 and it cannot be confirmed.`;
 
     const tools = {
       update_case_field: tool({

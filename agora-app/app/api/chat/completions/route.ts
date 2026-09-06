@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import { checkEscalation, getCase, updateCaseField } from '@/lib/caseStore';
 import { createTicket } from '@/lib/ticketStore';
 import { CaseFieldKey } from '@/types/case';
+import { extractSpokenDigits, normalizePhoneNumber } from '@/lib/phoneUtils';
 
 type ChatBody = {
   messages?: Array<{ role: string; content: unknown }>;
@@ -158,6 +159,25 @@ CRITICAL RULES:
           confirmationRejected?: boolean;
         }) => {
           try {
+            console.log(`\n================== [TOOL_CALL: update_case_field] ==================`);
+            console.log(`[PHONE_DEBUG][LLM_TOOL_RECEIVED] field: "${field}"`);
+            console.log(`[PHONE_DEBUG][LLM_TOOL_RECEIVED] EXACT raw value: ${JSON.stringify(value)} (type: ${typeof value})`);
+            console.log(`[PHONE_DEBUG][LLM_TOOL_RECEIVED] confidence: ${confidence}`);
+            console.log(`[PHONE_DEBUG][LLM_TOOL_RECEIVED] confirmationRejected: ${confirmationRejected}`);
+
+            if (field === 'contactNumber' && value !== undefined) {
+              const spoken = extractSpokenDigits(value);
+              const norm = normalizePhoneNumber(value);
+              console.log(`[PHONE_DEBUG][LLM_TOOL_VALIDATION] Breakdown:`, {
+                rawStringReceived: value,
+                extractSpokenDigitsOutput: spoken,
+                normalizePhoneNumberDigits: norm.digits,
+                resultingDigitCount: norm.digits.length,
+                isValid10: norm.isValid10,
+              });
+            }
+            console.log(`====================================================================\n`);
+
             const updatedCase = updateCaseField(
               sessionId,
               field as CaseFieldKey,

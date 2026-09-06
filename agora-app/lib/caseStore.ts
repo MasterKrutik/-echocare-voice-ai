@@ -225,6 +225,14 @@ export function updateCaseField(
   // If not exactly 10 digits, cap confidence at 0.3, increment reaskCount, and check escalation.
   if (field === 'contactNumber' && effectiveValue !== undefined) {
     const { digits, isValid10 } = normalizePhoneNumber(effectiveValue);
+    console.log(`[PHONE_DEBUG][caseStore:updateCaseField] contactNumber received:`, {
+      sessionId,
+      effectiveValue,
+      digits,
+      digitCount: digits.length,
+      isValid10,
+      currentReaskCount: targetField.reaskCount,
+    });
 
     if (isValid10) {
       effectiveValue = digits;

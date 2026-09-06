@@ -102,10 +102,14 @@ export function normalizePhoneNumber(raw: string): {
   digits: string;
   isValid10: boolean;
 } {
-  if (!raw) return { digits: '', isValid10: false };
+  if (!raw) {
+    console.log(`[PHONE_DEBUG][normalizePhoneNumber] Empty/null input received:`, { raw });
+    return { digits: '', isValid10: false };
+  }
 
   // First extract any digits from words or numbers
-  let digits = extractSpokenDigits(raw);
+  const spokenDigits = extractSpokenDigits(raw);
+  let digits = spokenDigits;
 
   // Fallback: if extractSpokenDigits found nothing, strip non-digits
   if (!digits) {
@@ -119,8 +123,19 @@ export function normalizePhoneNumber(raw: string): {
     digits = digits.slice(1);
   }
 
-  return {
+  const result = {
     digits,
     isValid10: digits.length === 10,
   };
+
+  console.log(`[PHONE_DEBUG][normalizePhoneNumber] Evaluated:`, {
+    rawInput: raw,
+    rawInputType: typeof raw,
+    extractSpokenDigitsOutput: spokenDigits,
+    finalNormalizedDigits: result.digits,
+    digitCount: result.digits.length,
+    isValid10: result.isValid10,
+  });
+
+  return result;
 }

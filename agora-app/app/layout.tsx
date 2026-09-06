@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import { RtmConsoleFilter } from '@/components/RtmConsoleFilter';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -41,10 +40,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full">
-      <body className="h-full min-h-screen">
-        <RtmConsoleFilter />
-        {children}
-      </body>
+      <body className="h-full min-h-screen">{children}</body>
     </html>
   );
 }

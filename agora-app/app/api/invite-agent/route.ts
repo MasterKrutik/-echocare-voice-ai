@@ -10,7 +10,6 @@ import {
 } from 'agora-agents';
 import { ClientStartRequest, AgentResponse } from '@/types/conversation';
 import { DEFAULT_AGENT_UID } from '@/lib/agora';
-import { registerAgentSession } from '@/lib/agentRegistry';
 
 // System prompt that defines the agent's personality and behavior.
 // Swap this out to change what the agent talks about.
@@ -233,7 +232,6 @@ export async function POST(request: NextRequest) {
     });
 
     const agentId = await session.start();
-    registerAgentSession(channel_name, agentId, session);
 
     return NextResponse.json({
       agent_id: agentId,

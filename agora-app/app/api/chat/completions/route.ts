@@ -5,8 +5,6 @@ import { randomUUID } from 'crypto';
 import { checkEscalation, getCase, updateCaseField } from '@/lib/caseStore';
 import { createTicket } from '@/lib/ticketStore';
 import { CaseFieldKey } from '@/types/case';
-import { POST_ESCALATION_HOLD_PROMPT } from '@/lib/prompts';
-import { updateAgentInstructions } from '@/lib/agentRegistry';
 
 type ChatBody = {
   messages?: Array<{ role: string; content: unknown }>;
@@ -187,8 +185,6 @@ CRITICAL RULES:
         execute: async ({ summary }: { summary: string }) => {
           try {
             const ticket = createTicket(sessionId, summary);
-            currentCase.escalated = true;
-            updateAgentInstructions(sessionId, POST_ESCALATION_HOLD_PROMPT).catch(() => {});
             return { success: true, ticketId: ticket.ticketId };
           } catch (err) {
             console.error('[tool:create_ticket] Error executing tool:', err);
@@ -198,20 +194,14 @@ CRITICAL RULES:
       }),
     };
 
-    const isPostEscalationHold = currentCase.escalated === true;
-    const effectiveSystemPrompt = isPostEscalationHold
-      ? POST_ESCALATION_HOLD_PROMPT
-      : caseStateSummary;
-    const effectiveTools = isPostEscalationHold ? undefined : tools;
-
     const result = streamTextImpl({
       // modelId is always sourced from the environment — body.model is ignored
       model: openai(modelId),
-      system: effectiveSystemPrompt,
+      system: caseStateSummary,
       messages: (body.messages ?? []) as NonNullable<
         Parameters<typeof streamText>[0]['messages']
       >,
-      tools: effectiveTools,
+      tools,
     });
 
     const encoder = new TextEncoder();

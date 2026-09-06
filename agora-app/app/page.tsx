@@ -35,14 +35,13 @@ export default function HomePage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Link href="/officer-login">
+            <Link href="/dashboard">
               <Button
                 variant="outline"
                 size="sm"
                 className="border-zinc-800 bg-zinc-900/90 text-zinc-300 hover:text-white hover:bg-zinc-800 text-xs font-semibold"
               >
-                <Shield className="h-3.5 w-3.5 mr-1.5 text-rose-400" />
-                Officer Login
+                Live Tickets Dashboard &rarr;
               </Button>
             </Link>
 
@@ -101,13 +100,13 @@ export default function HomePage() {
                 </Button>
               </Link>
 
-              <Link href="/officer-login" className="w-full sm:w-auto flex-1">
+              <Link href="/dashboard" className="w-full sm:w-auto flex-1">
                 <Button
                   variant="outline"
                   className="w-full h-12 border-zinc-700/80 bg-zinc-900/90 text-white hover:bg-zinc-800 hover:text-white font-semibold text-sm rounded-xl shadow-sm flex items-center justify-center gap-2"
                 >
-                  <Shield className="h-4 w-4 text-rose-400" />
-                  Municipal Officer Login
+                  <Building2 className="h-4 w-4 text-primary" />
+                  View Live Dashboard &rarr;
                 </Button>
               </Link>
             </div>
@@ -255,9 +254,9 @@ export default function HomePage() {
                 </div>
 
                 <div className="pt-4 border-t border-zinc-800/80">
-                  <Link href="/officer-login">
+                  <Link href="/dashboard">
                     <Button className="w-full bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-2 shadow-sm">
-                      Officer Dashboard Login
+                      View Live Grievance Dashboard
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Button>
                   </Link>

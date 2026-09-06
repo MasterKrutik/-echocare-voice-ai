@@ -13,47 +13,8 @@ const globalForTickets = globalThis as unknown as {
   __echocare_tickets?: Ticket[];
 };
 
-if (!globalForTickets.__echocare_tickets || globalForTickets.__echocare_tickets.length === 0) {
-  globalForTickets.__echocare_tickets = [
-    {
-      ticketId: 'TICKET-1788705977146-M5LAD',
-      sessionId: 'echocare-live-session-1',
-      summary:
-        'Citizen reported garbage grievance at sector eight nearmarket. Escalated to municipal officer due to: Escalated by municipal assistant to officer (Hold mode)',
-      caseSnapshot: {
-        category: {
-          value: 'garbage',
-          confidence: 0.95,
-          status: 'confirmed',
-          reaskCount: 0,
-        },
-        location: {
-          value: 'sector eight nearmarket',
-          confidence: 0.95,
-          status: 'confirmed',
-          reaskCount: 1,
-        },
-        description: {
-          value:
-            'से garbage नहीं आई है. और बहुत बदबू आ रही है। (Garbage collection disrupted for days with severe foul smell)',
-          confidence: 0.95,
-          status: 'confirmed',
-          reaskCount: 0,
-        },
-        contactNumber: {
-          value: '9876543210',
-          confidence: 0.95,
-          status: 'confirmed',
-          reaskCount: 0,
-        },
-        contradictionDetected: true,
-        escalated: true,
-        escalationReason:
-          'Escalated by municipal assistant to officer (Hold mode)',
-      },
-      createdAt: new Date().toISOString(),
-    },
-  ];
+if (!globalForTickets.__echocare_tickets) {
+  globalForTickets.__echocare_tickets = [];
 }
 
 const tickets: Ticket[] = globalForTickets.__echocare_tickets;

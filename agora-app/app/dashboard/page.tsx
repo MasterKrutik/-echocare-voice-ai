@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Ticket } from '@/lib/ticketStore';
@@ -90,30 +89,10 @@ function getConfidenceStyle(confidence: number) {
 }
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // Check officer authentication gate on mount
-  useEffect(() => {
-    async function checkAuth() {
-      try {
-        const res = await fetch('/api/officer-auth');
-        const data = await res.json();
-        if (!data.authenticated) {
-          router.replace('/officer-login');
-        } else {
-          setIsAuthenticated(true);
-        }
-      } catch {
-        router.replace('/officer-login');
-      }
-    }
-    checkAuth();
-  }, [router]);
 
   const fetchTickets = useCallback(async () => {
     try {
@@ -135,33 +114,15 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
     fetchTickets();
     const interval = setInterval(fetchTickets, 3000);
     return () => clearInterval(interval);
-  }, [fetchTickets, isAuthenticated]);
+  }, [fetchTickets]);
 
   const handleManualRefresh = () => {
     setIsRefreshing(true);
     fetchTickets();
   };
-
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/officer-auth', { method: 'DELETE' });
-    } finally {
-      router.push('/officer-login');
-    }
-  };
-
-  if (isAuthenticated === null) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center text-zinc-400 text-xs gap-3">
-        <span className="h-3 w-3 rounded-full bg-rose-500 animate-ping" />
-        <span>Verifying municipal officer credentials...</span>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -203,14 +164,15 @@ export default function DashboardPage() {
               </Button>
             </Link>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLogout}
-              className="border-rose-900/50 bg-rose-950/20 text-rose-300 hover:bg-rose-950/40 text-xs font-medium"
-            >
-              Sign Out
-            </Button>
+            <Link href="/">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-zinc-700/80 bg-zinc-900/80 text-zinc-300 hover:text-white hover:bg-zinc-800 text-xs font-medium"
+              >
+                Home
+              </Button>
+            </Link>
           </div>
         </header>
 
